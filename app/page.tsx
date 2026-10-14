@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 
 type Message = {
   role: "user" | "assistant";
-  text: string;
+  content: string;
 };
 
 export default function ChatPage() {
@@ -17,7 +17,10 @@ export default function ChatPage() {
     event.preventDefault();
     if (isSending || !text.trim()) return;
 
-    const message = text;
+    const nextMessages: Message[] = [
+      ...messages,
+      { role: "user", content: text },
+    ];
     setIsSending(true);
     setError(null);
 
@@ -25,7 +28,7 @@ export default function ChatPage() {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ messages: nextMessages }),
       });
       const data: unknown = await response.json();
 
@@ -50,11 +53,7 @@ export default function ChatPage() {
       }
 
       const answer = data.answer;
-      setMessages((previous) => [
-        ...previous,
-        { role: "user", text: message },
-        { role: "assistant", text: answer },
-      ]);
+      setMessages([...nextMessages, { role: "assistant", content: answer }]);
       setText("");
     } catch (error) {
       setError(
@@ -70,7 +69,7 @@ export default function ChatPage() {
   return (
     <main className="chat">
       <h1>Support chat</h1>
-      <p>Send a message and get an echo reply.</p>
+      <p>Send a message and get a reply.</p>
       <section
         className="messages"
         role="log"
@@ -81,7 +80,7 @@ export default function ChatPage() {
         {messages.map((message, index) => (
           <div className={`message ${message.role}`} key={index}>
             <strong>{message.role === "user" ? "You" : "Assistant"}</strong>
-            <p>{message.text}</p>
+            <p>{message.content}</p>
           </div>
         ))}
       </section>

@@ -1,3 +1,7 @@
+import { llm, LLM_MODEL } from "../../../lib/llm";
+
+const SYSTEM_MESSAGE = "You are a helpful assistant. Answer concisely.";
+
 export async function POST(request: Request) {
   let body: unknown;
   try {
@@ -9,17 +13,42 @@ export async function POST(request: Request) {
   if (
     typeof body !== "object" ||
     body === null ||
-    !("message" in body) ||
-    typeof body.message !== "string" ||
-    !body.message.trim()
+    !("messages" in body) ||
+    !Array.isArray(body.messages) ||
+    body.messages.length === 0
   ) {
     return Response.json(
-      { error: "Please provide a non-empty message string." },
+      { error: "Please provide a non-empty messages array." },
       { status: 400 },
     );
   }
 
-  return Response.json({
-    answer: `Hello, you just said: ${body.message}`,
+  for (const m of body.messages) {
+    if (
+      typeof m !== "object" ||
+      m === null ||
+      !("role" in m) ||
+      !("content" in m) ||
+      typeof m.content !== "string" ||
+      !m.content.trim() ||
+      (m.role !== "user" && m.role !== "assistant")
+    ) {
+      return Response.json(
+        {
+          error:
+            "Each message must have role 'user' or 'assistant' and a non-empty string content.",
+        },
+        { status: 400 },
+      );
+    }
+  }
+
+  const completion = await llm.chat.completions.create({
+    model: LLM_MODEL,
+    messages: [{ role: "system", content: SYSTEM_MESSAGE }, ...body.messages],
   });
+
+  const answer = completion.choices[0]?.message?.content ?? "";
+
+  return Response.json({ answer });
 }
