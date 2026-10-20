@@ -1,8 +1,13 @@
 import OpenAI from "openai";
-import { runTriage } from "../../../lib/llm";
+import { runTriage, LLM_MODEL } from "../../../lib/llm";
 import { LlmInvalidOutputError } from "../../../lib/errors";
+import { PROMPT_VERSION } from "../../../lib/prompt";
+import { logCall } from "../../../lib/logging";
+import { priceFor } from "../../../lib/pricing";
+import { providerFromBaseUrl } from "../../../lib/config";
 
 const MAX_TICKET_CHARS = 5000;
+const PROVIDER = providerFromBaseUrl(process.env.LLM_BASE_URL);
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -39,39 +44,63 @@ export async function POST(request: Request) {
     return Response.json({ error: "ticket is too long." }, { status: 400 });
   }
 
+  const start = Date.now();
   try {
-    const { result } = await runTriage({
+    const { result, usage } = await runTriage({
       subject: ticket.subject,
       body: ticket.body,
     });
+    const inputTokens = usage?.prompt_tokens ?? null;
+    const outputTokens = usage?.completion_tokens ?? null;
+    await logCall({
+      route: "triage",
+      api: "chat_completions",
+      prompt_ver: PROMPT_VERSION,
+      provider: PROVIDER,
+      model: LLM_MODEL,
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      cost_usd: priceFor(LLM_MODEL, inputTokens, outputTokens),
+      duration_ms: Date.now() - start,
+      outcome: "ok",
+      http_status: 200,
+    });
     return Response.json(result);
   } catch (err) {
-    return mapError(err);
+    const { outcome, status } = classify(err);
+    await logCall({
+      route: "triage",
+      api: "chat_completions",
+      prompt_ver: PROMPT_VERSION,
+      provider: PROVIDER,
+      model: LLM_MODEL,
+      input_tokens: null,
+      output_tokens: null,
+      cost_usd: null,
+      duration_ms: Date.now() - start,
+      outcome,
+      http_status: status,
+    });
+    return Response.json({ error: outcome }, { status });
   }
 }
 
-function mapError(err: unknown): Response {
+function classify(err: unknown): { outcome: string; status: number } {
   if (err instanceof LlmInvalidOutputError) {
-    return Response.json({ error: "invalid_model_output" }, { status: 502 });
+    return { outcome: "invalid_model_output", status: 502 };
   }
   if (err instanceof OpenAI.APIError) {
-    const status = err.status ?? 500;
-    if (status === 429) {
-      return Response.json({ error: "rate_limited" }, { status: 429 });
-    }
-    if (status === 408) {
-      return Response.json({ error: "triage_timeout" }, { status: 504 });
-    }
-    if (status >= 500) {
-      return Response.json({ error: "triage_unavailable" }, { status: 502 });
-    }
-    return Response.json({ error: "internal_error" }, { status: 500 });
+    const s = err.status ?? 500;
+    if (s === 429) return { outcome: "rate_limited", status: 429 };
+    if (s === 408) return { outcome: "triage_timeout", status: 504 };
+    if (s >= 500) return { outcome: "triage_unavailable", status: 502 };
+    return { outcome: "internal_error", status: 500 };
   }
   if (err instanceof OpenAI.APIConnectionTimeoutError) {
-    return Response.json({ error: "triage_timeout" }, { status: 504 });
+    return { outcome: "triage_timeout", status: 504 };
   }
   if (err instanceof OpenAI.APIConnectionError) {
-    return Response.json({ error: "triage_unavailable" }, { status: 502 });
+    return { outcome: "triage_unavailable", status: 502 };
   }
-  return Response.json({ error: "internal_error" }, { status: 500 });
+  return { outcome: "internal_error", status: 500 };
 }

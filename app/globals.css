@@ -76,3 +76,52 @@ button:disabled {
 [role="alert"] {
   color: #a51d25;
 }
+
+input[type="text"],
+input:not([type]) {
+  padding: 12px;
+  border: 1px solid #ccd3df;
+  border-radius: 8px;
+  font: inherit;
+}
+
+.admin {
+  max-width: 1100px;
+  margin: 32px auto;
+  padding: 24px;
+}
+
+.admin section {
+  margin-bottom: 28px;
+}
+
+.admin h2 {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+}
+
+.admin table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border: 1px solid #ccd3df;
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 0.9rem;
+}
+
+.admin th,
+.admin td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid #eef0f6;
+}
+
+.admin th {
+  background: #f0f2f6;
+  font-weight: 600;
+}
+
+.admin tr:last-child td {
+  border-bottom: none;
+}

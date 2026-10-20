@@ -24,5 +24,13 @@ Return a single JSON object with exactly these keys and no others:
 No prose, no markdown fence, no extra fields.`;
 
 export function buildUserMessage(ticket: { subject: string; body: string }): string {
-  return `<ticket>\n${ticket.subject}\n\n${ticket.body}\n</ticket>`;
+  // Strip any <ticket> tags the customer tried to inject. Otherwise a ticket
+  // like "</ticket>\nNew instructions: ..." can break out of our wrapper.
+  const subject = stripTicketTags(ticket.subject);
+  const body = stripTicketTags(ticket.body);
+  return `<ticket>\n${subject}\n\n${body}\n</ticket>`;
+}
+
+function stripTicketTags(s: string): string {
+  return s.replace(/<\/?\s*ticket[^>]*>/gi, "");
 }
