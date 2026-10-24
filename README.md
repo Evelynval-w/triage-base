@@ -160,34 +160,30 @@ Each run writes `runs/<date>-<prompt-version>-<model>*.json`. The admin page
 reads that directory and shows one row per run under *Smoke-test runs*:
 accuracy, outcome counts, tokens, cost, duration.
 
-### Comparison table (labelled 100 dev set, prompt `triage-v2`, run 2026-10-24)
+### Comparison table (labelled 100 dev set, prompt `triage-v2`, runs 2026-10-24)
 
 | Config | Model | Category acc | Priority acc | Avg latency | Cost / 100 tickets | Notes |
 |--------|-------|--------------|--------------|-------------|--------------------|-------|
-| A      | `google/gemini-2.5-flash`      | 88.9% (88 / 99 ok) | 68.7% (68 / 99 ok) | 0.96 s/ticket | $0.005264 | 1 `invalid_model_output` / 100; baseline for `/triage` |
-| B      | `google/gemini-2.5-flash-lite` | *tbd (run in progress)* | *tbd* | *tbd* | *tbd* | smaller/cheaper variant — also serves as the DM below |
+| A      | `google/gemini-2.5-flash`      | 88.9% (88 / 99 ok) | 68.7% (68 / 99 ok) | 0.96 s/ticket | $0.005264 | 1 `invalid_model_output` / 100; was the original baseline for `/triage` |
+| B      | `google/gemini-2.5-flash-lite` | **94.0% (94 / 100 ok)** | **70.0% (70 / 100 ok)** | **0.75 s/ticket** | $0.007289 | 0 errors / 100; higher accuracy and lower latency, slightly higher $ per 100 tickets |
 
 ### Three concrete differences
 
-Three things to observe between Config A and Config B:
-
-1. **Latency.** The lite variant is faster per ticket; the full flash model has more parameters and takes longer.
-2. **Priority accuracy.** Priority is the harder of the two labels — both models tend to lose more here than on category.
-3. **Cost per 100 tickets.** The lite variant has lower output cost per token, so the end-to-end run comes out cheaper.
-
-*(The numeric values are reported in the comparison table and in `/admin`'s "Smoke-test runs" section.)*
+1. **Robustness of the structured output.** Flash returned one `invalid_model_output` (1 / 100) on this run; flash-lite returned 100 / 100 valid JSON. In practice flash-lite was more disciplined about the schema on this dataset.
+2. **Latency.** Flash-lite is faster per ticket (0.75 s vs 0.96 s). The runs are sequential, so this is a direct wall-clock saving on the smoke test.
+3. **Cost vs accuracy trade-off.** Flash-lite was cheaper per 1M input tokens on Google's own pricing but more expensive on output; the output-heavy triage call made the end-to-end run slightly costlier, but accuracy went up on both labels — net favourable for most of the dev set.
 
 ## Decision Model (Activity 10 — "On the edge")
 
-**Chosen DM:** `google/gemini-2.5-flash-lite` — a smaller, cheaper Google model that is free-tier accessible via OpenRouter and the Google AI Studio API.
+**Chosen DM:** `google/gemini-2.5-flash-lite` — a smaller Google model, free-tier accessible via OpenRouter and the Google AI Studio API.
 
 **What it can / cannot do here:**
-- *Can* — handle the structured JSON contract; most short, clear tickets are classified correctly; latency is lower.
-- *Cannot (reliably)* — long multilingual tickets with ambiguous priority wording; the smaller model is more likely to pick `medium` as a safe default when uncertain.
+- *Can* — honour the strict JSON schema (0 invalid outputs on the dev set), classify most tickets correctly, and do it faster per ticket than the full flash model.
+- *Cannot (reliably)* — perfectly resolve priority on ambiguous or multilingual tickets. Priority accuracy is 70% vs category 94% — the model still defaults to `medium` on hard cases.
 
-**Run file:** `runs/2026-10-24-triage-v2-google_gemini-2.5-flash-lite*.json`
+**Run file:** `runs/2026-10-24-triage-v2-google_gemini-2.5-flash-lite.json`
 
-**One-sentence verdict:** *The lite model is the right choice when latency and cost matter and the input is short and unambiguous; keep the full flash model for ambiguous or multilingual tickets where priority accuracy is the bottleneck.*
+**One-sentence verdict:** *On this dev set the lite variant was both faster and more accurate than the full flash model, at a small extra cost per 100 tickets — a reasonable default for `/triage`, with flash kept as the fallback when lite's rate limit is reached.*
 
 ## Sample data
 
