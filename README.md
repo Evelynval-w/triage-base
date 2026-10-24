@@ -14,6 +14,16 @@ Built for the BCS S5 — EPITA — AI Systems Integration & Operations course.
 - `/smoke` — FE-driven smoke test runner (pick dataset + sample size, see predicted vs expected and mismatch counts)
 - `/admin` — call history, tokens, cost per model/prompt, and one row per saved smoke run
 
+## Screenshots
+
+**Triage result with token/cost usage (F1 + F2):**
+
+![Triage result page showing category, priority, summary, suggested action and the LLM usage box with input/output/total tokens and cost](./docs/screenshots/triage-with-tokens.png)
+
+**FE smoke runner — summary and per-row predicted vs expected (F3 + F4):**
+
+![Smoke runner page showing dataset, sample size, seed, outcomes, mismatch counts, token totals, duration, cost, saved run file, and the per-row table with predicted vs expected category and priority](./docs/screenshots/smoke-run.png)
+
 ## Run locally
 
 Requires Node.js 20.9 or newer.
