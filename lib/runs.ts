@@ -14,6 +14,7 @@ export type RunSummary = {
   total_input_tokens: number;
   total_output_tokens: number;
   total_duration_ms: number;
+  total_cost_usd: number | null;
 };
 
 const RUNS_DIR = join(process.cwd(), "runs");
@@ -49,6 +50,7 @@ export async function listRuns(): Promise<RunSummary[]> {
         total_input_tokens: run.total_input_tokens ?? 0,
         total_output_tokens: run.total_output_tokens ?? 0,
         total_duration_ms: run.total_duration_ms ?? 0,
+        total_cost_usd: run.total_cost_usd ?? null,
       });
     } catch {
       // Skip unreadable files silently.

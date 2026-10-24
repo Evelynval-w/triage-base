@@ -4,6 +4,7 @@ import OpenAI from "openai";
 import { LLM_MODEL, runTriage } from "../lib/llm";
 import { PROMPT_VERSION } from "../lib/prompt";
 import { LlmInvalidOutputError } from "../lib/errors";
+import { priceFor } from "../lib/pricing";
 
 type LabelledTicket = {
   ticket_id: string;
@@ -36,6 +37,7 @@ type Row = {
   duration_ms: number;
   input_tokens: number | null;
   output_tokens: number | null;
+  cost_usd: number | null;
   tags: string;
 };
 
@@ -100,14 +102,17 @@ async function main() {
         subject: t.subject,
         body: t.body,
       });
+      const inputTokens = usage?.prompt_tokens ?? null;
+      const outputTokens = usage?.completion_tokens ?? null;
       rows.push({
         ticket_id: t.ticket_id,
         expected: { category: t.category, priority: t.priority },
         predicted: { ...result },
         outcome: "ok",
         duration_ms: Date.now() - start,
-        input_tokens: usage?.prompt_tokens ?? null,
-        output_tokens: usage?.completion_tokens ?? null,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        cost_usd: priceFor(LLM_MODEL, inputTokens, outputTokens),
         tags: t.tags,
       });
     } catch (err) {
@@ -119,6 +124,7 @@ async function main() {
         duration_ms: Date.now() - start,
         input_tokens: null,
         output_tokens: null,
+        cost_usd: null,
         tags: t.tags,
       });
     }
@@ -149,12 +155,18 @@ function summarize(rows: Row[]) {
   let totalIn = 0;
   let totalOut = 0;
   let totalMs = 0;
+  let totalCost = 0;
+  let hasCost = false;
 
   for (const r of rows) {
     outcome_counts[r.outcome] = (outcome_counts[r.outcome] ?? 0) + 1;
     totalMs += r.duration_ms;
     totalIn += r.input_tokens ?? 0;
     totalOut += r.output_tokens ?? 0;
+    if (r.cost_usd !== null) {
+      totalCost += r.cost_usd;
+      hasCost = true;
+    }
 
     const exp = r.expected.category;
     if (r.outcome === "ok") {
@@ -178,6 +190,7 @@ function summarize(rows: Row[]) {
     total_input_tokens: totalIn,
     total_output_tokens: totalOut,
     total_duration_ms: totalMs,
+    total_cost_usd: hasCost ? totalCost : null,
     count: rows.length,
     ok_count: okCount,
   };
@@ -204,8 +217,10 @@ function printSummary(s: ReturnType<typeof summarize>) {
     console.log(row.map((cell) => cell.padStart(16, " ")).join(""));
   }
 
+  const costStr =
+    s.total_cost_usd !== null ? ` cost=$${s.total_cost_usd.toFixed(6)}` : "";
   console.log(
-    `\nTotals: input=${s.total_input_tokens} tokens, output=${s.total_output_tokens} tokens, duration=${(s.total_duration_ms / 1000).toFixed(1)}s`,
+    `\nTotals: input=${s.total_input_tokens} tokens, output=${s.total_output_tokens} tokens, duration=${(s.total_duration_ms / 1000).toFixed(1)}s${costStr}`,
   );
 }
 

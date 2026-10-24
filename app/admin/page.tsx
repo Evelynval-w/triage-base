@@ -139,6 +139,7 @@ export default async function AdminPage() {
                 <th>Priority acc</th>
                 <th>Input tokens</th>
                 <th>Output tokens</th>
+                <th>Cost</th>
                 <th>Duration</th>
                 <th>Outcomes</th>
               </tr>
@@ -162,6 +163,11 @@ export default async function AdminPage() {
                   </td>
                   <td>{r.total_input_tokens.toLocaleString()}</td>
                   <td>{r.total_output_tokens.toLocaleString()}</td>
+                  <td>
+                    {r.total_cost_usd !== null
+                      ? `$${r.total_cost_usd.toFixed(6)}`
+                      : "—"}
+                  </td>
                   <td>{(r.total_duration_ms / 1000).toFixed(1)}s</td>
                   <td>
                     {Object.entries(r.outcome_counts)

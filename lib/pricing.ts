@@ -6,6 +6,7 @@ export const PRICES: Record<string, { input: number; output: number }> = {
   "anthropic/claude-haiku-4-5": { input: 1, output: 5 },
   "anthropic/claude-sonnet-4-5": { input: 3, output: 15 },
   "google/gemini-2.5-flash": { input: 0.075, output: 0.3 },
+  "google/gemini-2.5-flash-lite": { input: 0.1, output: 0.4 },
   "meta-llama/llama-3.3-70b-instruct": { input: 0.59, output: 0.79 },
 };
 
