@@ -125,3 +125,27 @@ input:not([type]) {
 .admin tr:last-child td {
   border-bottom: none;
 }
+
+.topnav {
+  display: flex;
+  gap: 16px;
+  padding: 10px 24px;
+  background: #f0f2f6;
+  border-bottom: 1px solid #ccd3df;
+  font-size: 0.95rem;
+}
+
+.topnav a {
+  text-decoration: none;
+  color: #0a3677;
+}
+
+.topnav a:hover {
+  text-decoration: underline;
+}
+
+.usage p {
+  font-size: 0.85rem;
+  color: #555;
+  font-family: ui-monospace, Menlo, monospace;
+}
