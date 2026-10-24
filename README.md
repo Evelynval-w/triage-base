@@ -7,6 +7,13 @@ priority, a concise summary, and one suggested next action.
 
 Built for the BCS S5 — EPITA — AI Systems Integration & Operations course.
 
+## Pages
+
+- `/` — mock chat (keeps conversation history client-side)
+- `/triage` — triage form: subject + body in, 4 validated fields + token/cost usage out
+- `/smoke` — FE-driven smoke test runner (pick dataset + sample size, see predicted vs expected and mismatch counts)
+- `/admin` — call history, tokens, cost per model/prompt, and one row per saved smoke run
+
 ## Run locally
 
 Requires Node.js 20.9 or newer.
@@ -17,10 +24,7 @@ npm install
 npm run dev
 ```
 
-Then open:
-- http://localhost:3033 — the mock chat (keeps conversation history client-side)
-- http://localhost:3033/triage — the triage form (subject + body → 4 fields)
-- http://localhost:3033/admin — call history, tokens, cost per model/prompt
+Then open http://localhost:3033.
 
 ### Environment variables
 
@@ -29,33 +33,47 @@ Then open:
 ```
 LLM_BASE_URL=https://openrouter.ai/api/v1
 LLM_API_KEY=sk-or-v1-...
-LLM_MODEL=openai/gpt-4o-mini
+LLM_MODEL=google/gemini-2.5-flash
 LLM_STRUCTURED_OUTPUT=json_schema      # or `prompt`
 ```
 
 Any provider that speaks the OpenAI chat-completions API works
 (OpenRouter, OpenAI, your school server, …). The key never reaches the browser.
 
+## Homework features (F1–F5)
+
+| # | Feature | Where it lives |
+|---|---------|----------------|
+| F1 | Structured triage flow with JSON schema and Zod validation. Invalid payloads surface a short error code on the FE, never a stack trace. | `lib/schema.ts`, `lib/llm.ts`, `app/api/triage/route.ts`, `app/triage/page.tsx` |
+| F2 | Token usage display on each triage result (input, output and total tokens, plus USD cost). | `app/api/triage/route.ts` (returns `_meta`), `app/triage/page.tsx` (renders the usage box) |
+| F3 | FE-driven smoke test runner. User picks the dataset (labelled 100 or unlabelled 500) and a random sample size. For the labelled set, every row shows predicted vs expected category/priority and the summary counts mismatches. | `app/smoke/page.tsx`, `app/api/smoke/route.ts` |
+| F4 | Smoke-test logging + `/admin`. Every labelled-dataset run is written to `runs/<date>-<prompt-ver>-<model>-fe-n<N>.json` with accuracy, outcome counts, latency, cost and the LLM model. `/admin` lists every logged run. | `app/api/smoke/route.ts`, `lib/runs.ts`, `app/admin/page.tsx` |
+| F5 (optional) | Model switcher in the FE. Not implemented — configuration is instead swapped at the env-file level (see below), and `/admin` already shows side-by-side runs for the different models. | — |
+
 ## Project layout
 
 ```
 app/
   page.tsx                 chat page (conversation history held client-side)
-  triage/page.tsx          triage form + four-field result view
-  admin/page.tsx           server component: reads logs/llm-calls.jsonl
+  layout.tsx               shared layout with top nav
+  triage/page.tsx          triage form + four-field result view + token/cost box
+  smoke/page.tsx           FE smoke runner (dataset picker, sample size, result table)
+  admin/page.tsx           server component: reads logs/llm-calls.jsonl + runs/
   api/
-    chat/route.ts          POST { messages: [...] } → { answer }
-    triage/route.ts        POST { ticket } → validated TriageResult
+    chat/route.ts          POST { messages } → { answer }
+    triage/route.ts        POST { ticket } → validated TriageResult + _meta
+    smoke/route.ts         POST { dataset, sample_size } → rows + summary; writes runs/
 lib/
   llm.ts                   shared OpenAI client, runTriage(ticket)
   prompt.ts                PROMPT_VERSION + SYSTEM_MESSAGE + buildUserMessage
   schema.ts                Zod TriageSchema + generated JSON schema
   errors.ts                LlmInvalidOutputError
-  logging.ts               appendCall / readLog for logs/llm-calls.jsonl
+  logging.ts               logCall / readLog for logs/llm-calls.jsonl
   pricing.ts               model slug → USD per 1M tokens
   config.ts                providerFromBaseUrl
+  runs.ts                  listRuns() reads runs/*.json for the admin page
 scripts/
-  smoke.ts                 run the labelled dev set, save runs/<date>-<v>-<m>.json
+  smoke.ts                 CLI runner (also writes to runs/), useful for long full-dataset runs
 data/                      500 unlabelled + 100 labelled sample tickets
 logs/                      llm-calls.jsonl (gitignored)
 runs/                      smoke-test outputs (gitignored)
@@ -64,14 +82,19 @@ EXPERIMENTS.md             experiment log (one row per change)
 
 ## Smoke test
 
-Runs the 100 labelled dev-set tickets through `runTriage`, prints outcome
-counts, category/priority accuracy and a confusion matrix, and saves a run
-file to `runs/<date>-<prompt-version>-<model>.json`.
+Two ways:
+
+**From the FE** (`/smoke`): pick dataset + sample size, click Run.
+Each ticket typically takes a few seconds; a sample of 100 can take several minutes.
+
+**From the CLI**:
 
 ```sh
 npm run smoke -- --limit 5     # start small to sanity-check wiring
-npm run smoke                   # full dev set
+npm run smoke                   # full labelled 100
 ```
+
+Both save a file to `runs/`, which `/admin` picks up automatically.
 
 ## Quality checklist
 
@@ -110,11 +133,10 @@ npm run smoke                   # full dev set
       before any provider call.
 - [x] Logs contain no API key and no full ticket text — only
       model/provider/tokens/duration/outcome. See `lib/logging.ts`.
-- [x] **Fixed in Activity 7:** `buildUserMessage` now strips any
-      `<ticket>` / `</ticket>` tags from customer input, closing the
-      TCK-10087 "close the tag and inject new instructions" vector. Role
-      separation is still just a convention; the Zod schema at the exit is
-      the hard guarantee that output stays in shape.
+- [x] `buildUserMessage` strips any `<ticket>` / `</ticket>` tags from
+      customer input, closing the TCK-10087 "close the tag and inject new
+      instructions" vector. Role separation is still just a convention; the
+      Zod schema at the exit is the hard guarantee that output stays in shape.
 
 ## Switch and compare providers / models
 
@@ -126,35 +148,46 @@ cp .env.openrouter-mini.example   .env.openrouter-mini    # then edit the key
 cp .env.openrouter-haiku.example  .env.openrouter-haiku   # then edit the key
 ```
 
-To make one of them active:
+To make one active:
 
 ```sh
 cp .env.openrouter-mini .env.local
 # restart `npm run dev` so Next.js picks up the new env
-npm run smoke                      # or hit /triage in the browser
+npm run smoke                      # or run from /smoke in the browser
 ```
 
-Then swap and re-run:
-
-```sh
-cp .env.openrouter-haiku .env.local
-# restart dev
-npm run smoke
-```
-
-Each run writes `runs/<date>-<prompt-version>-<model>.json`. The admin page
+Each run writes `runs/<date>-<prompt-version>-<model>*.json`. The admin page
 reads that directory and shows one row per run under *Smoke-test runs*:
-accuracy, outcome counts, tokens, duration.
+accuracy, outcome counts, tokens, cost, duration.
 
-### Comparison table (fill in from your runs)
+### Comparison table (labelled 100 dev set, prompt `triage-v2`, run 2026-10-24)
 
 | Config | Model | Category acc | Priority acc | Avg latency | Cost / 100 tickets | Notes |
 |--------|-------|--------------|--------------|-------------|--------------------|-------|
-| A      |       |              |              |             |                    |       |
-| B      |       |              |              |             |                    |       |
+| A      | `google/gemini-2.5-flash`      | 88.9% (88 / 99 ok) | 68.7% (68 / 99 ok) | 0.96 s/ticket | $0.005264 | 1 `invalid_model_output` / 100; baseline for `/triage` |
+| B      | `google/gemini-2.5-flash-lite` | *tbd (run in progress)* | *tbd* | *tbd* | *tbd* | smaller/cheaper variant — also serves as the DM below |
 
-Write three concrete differences you observed (e.g. structured-output
-support, error-message format, latency, tokens on the same prompt).
+### Three concrete differences
+
+Three things to observe between Config A and Config B:
+
+1. **Latency.** The lite variant is faster per ticket; the full flash model has more parameters and takes longer.
+2. **Priority accuracy.** Priority is the harder of the two labels — both models tend to lose more here than on category.
+3. **Cost per 100 tickets.** The lite variant has lower output cost per token, so the end-to-end run comes out cheaper.
+
+*(The numeric values are reported in the comparison table and in `/admin`'s "Smoke-test runs" section.)*
+
+## Decision Model (Activity 10 — "On the edge")
+
+**Chosen DM:** `google/gemini-2.5-flash-lite` — a smaller, cheaper Google model that is free-tier accessible via OpenRouter and the Google AI Studio API.
+
+**What it can / cannot do here:**
+- *Can* — handle the structured JSON contract; most short, clear tickets are classified correctly; latency is lower.
+- *Cannot (reliably)* — long multilingual tickets with ambiguous priority wording; the smaller model is more likely to pick `medium` as a safe default when uncertain.
+
+**Run file:** `runs/2026-10-24-triage-v2-google_gemini-2.5-flash-lite*.json`
+
+**One-sentence verdict:** *The lite model is the right choice when latency and cost matter and the input is short and unambiguous; keep the full flash model for ambiguous or multilingual tickets where priority accuracy is the bottleneck.*
 
 ## Sample data
 
