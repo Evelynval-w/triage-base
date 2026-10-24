@@ -52,6 +52,7 @@ export async function POST(request: Request) {
     });
     const inputTokens = usage?.prompt_tokens ?? null;
     const outputTokens = usage?.completion_tokens ?? null;
+    const costUsd = priceFor(LLM_MODEL, inputTokens, outputTokens);
     await logCall({
       route: "triage",
       api: "chat_completions",
@@ -60,12 +61,24 @@ export async function POST(request: Request) {
       model: LLM_MODEL,
       input_tokens: inputTokens,
       output_tokens: outputTokens,
-      cost_usd: priceFor(LLM_MODEL, inputTokens, outputTokens),
+      cost_usd: costUsd,
       duration_ms: Date.now() - start,
       outcome: "ok",
       http_status: 200,
     });
-    return Response.json(result);
+    return Response.json({
+      ...result,
+      _meta: {
+        model: LLM_MODEL,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        total_tokens:
+          inputTokens !== null && outputTokens !== null
+            ? inputTokens + outputTokens
+            : null,
+        cost_usd: costUsd,
+      },
+    });
   } catch (err) {
     const { outcome, status } = classify(err);
     await logCall({

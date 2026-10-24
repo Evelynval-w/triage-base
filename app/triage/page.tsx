@@ -7,6 +7,13 @@ type TriageResult = {
   priority: "low" | "medium" | "high";
   summary: string;
   suggested_action: string;
+  _meta?: {
+    model: string;
+    input_tokens: number | null;
+    output_tokens: number | null;
+    total_tokens: number | null;
+    cost_usd: number | null;
+  };
 };
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -104,6 +111,24 @@ export default function TriagePage() {
             <strong>Suggested action</strong>
             <p>{result.suggested_action}</p>
           </div>
+          {result._meta && (
+            <div className="message assistant usage">
+              <strong>LLM usage</strong>
+              <p>
+                model: {result._meta.model}
+                <br />
+                input tokens: {result._meta.input_tokens ?? "—"}
+                <br />
+                output tokens: {result._meta.output_tokens ?? "—"}
+                <br />
+                total tokens: {result._meta.total_tokens ?? "—"}
+                <br />
+                cost: {result._meta.cost_usd !== null
+                  ? `$${result._meta.cost_usd.toFixed(6)}`
+                  : "—"}
+              </p>
+            </div>
+          )}
         </section>
       )}
     </main>
